@@ -1,5 +1,5 @@
 /* Time Bender — service worker */
-const CACHE = "time-bender-v4";
+const CACHE = "time-bender-v5";
 const FB_VER = "10.12.5";
 const ASSETS = [
   "./",

@@ -78,10 +78,12 @@ This makes each user able to read/write **only their own** data.
 - **Project settings (⚙) → Your apps → Web (`</>`) → Register app** → copy the
   `firebaseConfig` object.
 
-### 6. Paste it into the app
-- Open **`index.html`**, find the `firebaseConfig` block near the top of the
-  `<script type="module">`, and replace the `PASTE_…` placeholders with your values.
-- If you leave the placeholders, the app simply runs in local-only mode.
+### 6. Paste it into the app (not into the code)
+- Deploy the app first (see below), open it, then go to **Settings (⚙)** and paste
+  the whole `const firebaseConfig = { ... }` block into the **Cloud** field → **Connect**.
+- Your config is stored **on that device only** (localStorage) — it is never written
+  to `index.html` or committed to the repo. Do this once per device.
+- Without a config, the app simply runs in local-only mode.
 
 ### 7. Authorized domains
 - **Authentication → Settings → Authorized domains**.
@@ -163,8 +165,9 @@ Dosyaları host et, bitti. Veriler cihazda `localStorage`'da tutulur.
 3. **Firestore Database → Create → Production mode →** bölge: `europe-west3`.
 4. **Firestore → Rules** → yukarıdaki kuralları yapıştır → **Publish**.
 5. **Project settings → Your apps → Web (`</>`)** → `firebaseConfig`'i kopyala.
-6. `index.html` içinde baştaki `firebaseConfig` bloğundaki `PASTE_…` yerlerine yapıştır.
-   (Boş bırakırsan uygulama yerel modda çalışır.)
+6. Uygulamayı yayına al, aç, **Ayarlar (⚙)** → **Bulut** kutusuna `const firebaseConfig = { ... }`
+   bloğunu yapıştır → **Bağlan**. Config **sadece o cihazda** (localStorage) saklanır, koda
+   yazılmaz, repoya gitmez. Her cihazda bir kez yaparsın. (Yapmazsan uygulama yerel çalışır.)
 7. **Authentication → Settings → Authorized domains:** Firebase Hosting otomatik
    eklenir; GitHub Pages kullanırsan `kullanıcı-adın.github.io`'yu elle ekle.
 

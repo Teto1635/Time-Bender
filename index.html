@@ -229,6 +229,7 @@
   .bigtitle{font-size:25px;font-weight:800;letter-spacing:-.3px;margin:2px 0 2px}
   .sectrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 2px 0;min-height:24px}
   .addrec{font-size:13px;font-weight:700;color:var(--accent);background:none;border:none;padding:4px 2px}
+  .linkbtn{display:block;width:100%;text-align:center;background:none;border:none;color:var(--muted);font-size:12.5px;padding:10px 2px 2px;text-decoration:underline;text-underline-offset:2px}
   /* reports */
   .reprow{padding:12px 2px 10px;border-bottom:1px solid var(--line)}
   .repline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
@@ -281,20 +282,29 @@
 /* ======================================================================
    TIME BENDER  —  zamanını nereye harcadığını kaydet
    ----------------------------------------------------------------------
-   FIREBASE CONFIG  (fork'layanlar / sen buraya kendi projenizi koyun)
-   console.firebase.google.com → Project settings → Your apps → Web → config
-   Boş bırakırsan uygulama YEREL modda çalışır (senkron yok, sadece cihaz).
+   CLOUD SYNC (optional): NO API key lives in this file. To enable cloud
+   sync, open the app → Settings (⚙) → paste your own Firebase web config
+   there. It is saved on THIS device (localStorage) only — never in the
+   repo. Forkers paste their own config. Without a config, the app runs
+   fully local on the device.
    ====================================================================== */
-const firebaseConfig = {
-  apiKey: "AIzaSyCik2x7ajsBe_hMLJcafDMTsQYsGbXUyhQ",
-  authDomain: "time-bender-25ce8.firebaseapp.com",
-  projectId: "time-bender-25ce8",
-  storageBucket: "time-bender-25ce8.firebasestorage.app",
-  messagingSenderId: "111719854127",
-  appId: "1:111719854127:web:91f692e480237a6a0f96da"
-};
 const FB_VER = "10.12.5";
-const FIREBASE_ENABLED = !!firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf("PASTE") !== 0;
+const FB_CFG_KEY = "tb_fb_config";
+function extractConfigObject(text){
+  const s=text||""; const fc=s.indexOf("firebaseConfig");
+  let start=(fc>=0)?s.indexOf("{",fc):s.indexOf("{"); if(start<0) return null;
+  let depth=0,end=-1;
+  for(let i=start;i<s.length;i++){ if(s[i]==="{")depth++; else if(s[i]==="}"){ depth--; if(depth===0){ end=i; break; } } }
+  if(end<0) return null; return s.slice(start,end+1);
+}
+function parseFbConfig(text){
+  const obj=extractConfigObject(text); if(!obj) return null;
+  try{ return JSON.parse(obj); }catch(e){}
+  try{ return (new Function("return ("+obj+")"))(); }catch(e){}
+  return null;
+}
+function getStoredConfig(){ try{ const r=localStorage.getItem(FB_CFG_KEY); if(!r) return null; const c=JSON.parse(r); return (c&&c.apiKey&&c.projectId)?c:null; }catch(e){ return null; } }
+function cloudConfigured(){ return !!getStoredConfig(); }
 
 const LS_KEY = "time_bender_v1";
 const LANG_KEY = "tb-lang";
@@ -343,8 +353,12 @@ const I18N = {
     signin_google:"Google ile giriş yap",
     signin_hint:"Telefon ve bilgisayarın arasında otomatik senkron için aynı Google hesabıyla giriş yap.",
     signout:"Çıkış", sync_on:"Senkron açık",
-    config_hint:"Senkron kapalı — uygulama bu cihazda yerel çalışıyor. Bulut senkronu için index.html içine Firebase config’ini ekle.",
-    noconfig_alert:"Firebase config eklenmemiş. index.html içindeki firebaseConfig’i doldur.",
+    cloud_setup_hint:"Bulut senkronu (telefon↔bilgisayar) için: console.firebase.google.com → proje + Web app → çıkan firebaseConfig bloğunu aşağıya yapıştır. Anahtar bu cihazda saklanır, koda yazılmaz.",
+    cloud_cfg_placeholder:"Firebase’in verdiği \"const firebaseConfig = { ... }\" bloğunu olduğu gibi yapıştır",
+    cloud_connect:"Bağlan",
+    cloud_cfg_unread:"Config okunamadı — apiKey ve projectId içeren bloğu yapıştır.",
+    cloud_remove:"Bulut bağlantısını kaldır",
+    cloud_remove_confirm:"Bu cihazdaki bulut bağlantısı kaldırılsın? Veriler cihazda kalır, istersen sonra tekrar bağlanırsın.",
     signin_err:"Giriş yapılamadı. Bağlantıyı ve Firebase ayarlarını kontrol et.",
     set_rest:"Mola hatırlatma süresi (dk)", set_snooze:"Hatırlatma tekrar süresi (dk)",
     set_keepawake:"Sayaç açıkken ekranı açık tut", set_backup:"Yedekleme",
@@ -394,8 +408,12 @@ const I18N = {
     signin_google:"Sign in with Google",
     signin_hint:"Sign in with the same Google account on your phone and computer to sync automatically.",
     signout:"Sign out", sync_on:"Synced",
-    config_hint:"Sync off — running locally on this device. Add your Firebase config in index.html to enable cloud sync.",
-    noconfig_alert:"Firebase config not set. Fill in firebaseConfig in index.html.",
+    cloud_setup_hint:"For cloud sync (phone↔computer): console.firebase.google.com → create project + Web app → paste the firebaseConfig block below. The key is stored on this device, never in the code.",
+    cloud_cfg_placeholder:"Paste the \"const firebaseConfig = { ... }\" block Firebase gave you, as is",
+    cloud_connect:"Connect",
+    cloud_cfg_unread:"Couldn't read config — paste the block containing apiKey and projectId.",
+    cloud_remove:"Remove cloud connection",
+    cloud_remove_confirm:"Remove the cloud connection on this device? Your data stays on the device; you can reconnect later.",
     signin_err:"Sign-in failed. Check your connection and Firebase setup.",
     set_rest:"Break reminder interval (min)", set_snooze:"Reminder snooze interval (min)",
     set_keepawake:"Keep screen on while timer runs", set_backup:"Backup",
@@ -436,7 +454,7 @@ let wakeLock = null;
 let toastT = null;
 
 /* cloud */
-let fb = null, fbReady = false, fbInitTried = false;
+let fb = null, fbReady = false, fbIniting = false;
 let user = null, mode = "local";
 let metaRef = null, sessCol = null, unsubMeta = null, unsubSess = null;
 let applyingRemote = false, pushTimer = null, seeded = false, appliedOnce = false;
@@ -569,7 +587,7 @@ function renderHome(){
     '<div class="langtog"><button data-act="lang" data-lang="tr" class="'+(lang==="tr"?"on":"")+'">TR</button>'+
     '<button data-act="lang" data-lang="en" class="'+(lang==="en"?"on":"")+'">EN</button></div>'+
     '<button class="iconbtn" data-act="settings">⚙</button></div>';
-  const badge=(FIREBASE_ENABLED && user)? '<span class="syncbadge">☁</span>' : '';
+  const badge=(user)? '<span class="syncbadge">☁</span>' : '';
   h+='<div class="subbar"><span class="today">'+t("today")+' <b class="mono">'+(totalToday?fmtDuration(totalToday):zeroDur())+'</b></span>'+
      '<span class="subright">'+badge+'<button class="repbtn" data-act="open-reports">'+t("reports_btn")+'</button></span></div>';
 
@@ -925,9 +943,18 @@ function deleteSession(sid){
 }
 function settingsModal(){
   let acct;
-  if(!FIREBASE_ENABLED){ acct='<div class="muted tiny" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;line-height:1.5">'+t("config_hint")+'</div>'; }
-  else if(user){ acct='<div class="acctbox"><div class="acctinfo"><div class="acctname">'+esc(user.displayName||user.email||"")+'</div><div class="acctsync">☁ '+t("sync_on")+'</div></div><button class="btn ghost" data-act="signout">'+t("signout")+'</button></div>'; }
-  else { acct='<button class="btn primary wide" data-act="signin">'+t("signin_google")+'</button><div class="muted tiny" style="text-align:center;margin-top:8px;line-height:1.5">'+t("signin_hint")+'</div>'; }
+  if(!cloudConfigured()){
+    acct='<div class="muted tiny" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;line-height:1.5">'+t("cloud_setup_hint")+'</div>'+
+      '<textarea id="fbCfgInput" placeholder="'+t("cloud_cfg_placeholder")+'" style="min-height:96px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;margin-top:8px"></textarea>'+
+      '<button class="btn primary wide" style="margin-top:8px" data-act="save-fbconfig">'+t("cloud_connect")+'</button>';
+  } else if(user){
+    acct='<div class="acctbox"><div class="acctinfo"><div class="acctname">'+esc(user.displayName||user.email||"")+'</div><div class="acctsync">☁ '+t("sync_on")+'</div></div><button class="btn ghost" data-act="signout">'+t("signout")+'</button></div>'+
+      '<button class="linkbtn" data-act="clear-fbconfig">'+t("cloud_remove")+'</button>';
+  } else {
+    acct='<button class="btn primary wide" data-act="signin">'+t("signin_google")+'</button>'+
+      '<div class="muted tiny" style="text-align:center;margin-top:8px;line-height:1.5">'+t("signin_hint")+'</div>'+
+      '<button class="linkbtn" data-act="clear-fbconfig">'+t("cloud_remove")+'</button>';
+  }
   openModal('<div class="sheet"><h3>'+t("set_title")+'</h3>'+
     '<label>'+t("account")+'</label>'+acct+
     '<label>'+t("set_rest")+'</label><input id="setRest" type="number" min="1" max="240" value="'+state.settings.restMin+'">'+
@@ -987,18 +1014,20 @@ function resetAll(){
 
 /* ----------------------------- cloud (Firebase) ----------------------------- */
 async function initFirebase(){
-  if(!FIREBASE_ENABLED || fbInitTried) return; fbInitTried=true;
+  if(fbReady || fbIniting) return;
+  const cfg=getStoredConfig(); if(!cfg) return;
+  fbIniting=true;
   try{
     const base="https://www.gstatic.com/firebasejs/"+FB_VER+"/";
     const mods=await Promise.all([ import(base+"firebase-app.js"), import(base+"firebase-auth.js"), import(base+"firebase-firestore.js") ]);
     const ap=mods[0], au=mods[1], fs=mods[2];
-    const app=ap.initializeApp(firebaseConfig);
+    const app=ap.initializeApp(cfg);
     let db; try{ db=fs.initializeFirestore(app,{ localCache: fs.persistentLocalCache({}) }); }catch(e){ db=fs.getFirestore(app); }
     const auth=au.getAuth(app);
-    fb={ app, db, auth, au, fs }; fbReady=true;
+    fb={ app, db, auth, au, fs }; fbReady=true; fbIniting=false;
     try{ await au.getRedirectResult(auth); }catch(e){}
     au.onAuthStateChanged(auth, onAuth);
-  }catch(e){ console.warn("Firebase init failed", e); }
+  }catch(e){ fbIniting=false; console.warn("Firebase init failed", e); }
 }
 function onAuth(u){
   user=u;
@@ -1052,7 +1081,7 @@ function cloudPutMeta(){
 function cloudPutSession(s){ if(!fb || !sessCol) return; fb.fs.setDoc(fb.fs.doc(sessCol,s.id),{ activityId:s.activityId, start:s.start, end:s.end, note:s.note||"" }).catch(e=>console.warn("sess put",e)); }
 function cloudDelSession(id){ if(!fb || !sessCol) return; fb.fs.deleteDoc(fb.fs.doc(sessCol,id)).catch(e=>console.warn("sess del",e)); }
 async function signIn(){
-  if(!FIREBASE_ENABLED){ alert(t("noconfig_alert")); return; }
+  if(!cloudConfigured()) return;
   if(!fbReady){ await initFirebase(); }
   if(!fbReady){ alert(t("signin_err")); return; }
   const provider=new fb.au.GoogleAuthProvider();
@@ -1065,6 +1094,19 @@ async function signIn(){
   }
 }
 async function doSignOut(){ try{ if(fb) await fb.au.signOut(fb.auth); }catch(e){} }
+function saveFbConfig(){
+  const el=document.getElementById("fbCfgInput"); if(!el) return;
+  const cfg=parseFbConfig(el.value);
+  if(!cfg || !cfg.apiKey || !cfg.projectId){ alert(t("cloud_cfg_unread")); return; }
+  try{ localStorage.setItem(FB_CFG_KEY, JSON.stringify(cfg)); }catch(e){}
+  location.reload();   // clean (re)init of Firebase from the new config
+}
+function clearFbConfig(){
+  if(!confirm(t("cloud_remove_confirm"))) return;
+  try{ if(fb) fb.au.signOut(fb.auth); }catch(e){}
+  try{ localStorage.removeItem(FB_CFG_KEY); }catch(e){}
+  location.reload();   // back to local-only
+}
 
 /* ----------------------------- events ----------------------------- */
 function toast(msg){ const tt=document.getElementById("toast"); tt.textContent=msg; tt.classList.add("show");
@@ -1110,6 +1152,8 @@ document.addEventListener("click",(e)=>{
     case "reset-all": resetAll(); break;
     case "signin": signIn(); break;
     case "signout": doSignOut(); break;
+    case "save-fbconfig": saveFbConfig(); break;
+    case "clear-fbconfig": clearFbConfig(); break;
     case "lang": { lang=el.getAttribute("data-lang"); localStorage.setItem(LANG_KEY,lang); applyLangChrome();
       const so=currentModalId==="settings"; render(); if(so) settingsModal(); } break;
     case "close-modal": closeModal(); break;

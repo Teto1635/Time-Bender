@@ -229,6 +229,18 @@
   .bigtitle{font-size:25px;font-weight:800;letter-spacing:-.3px;margin:2px 0 2px}
   .sectrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 2px 0;min-height:24px}
   .addrec{font-size:13px;font-weight:700;color:var(--accent);background:none;border:none;padding:4px 2px}
+  /* ===== home: full-color horizontal bars (replaces square tiles) ===== */
+  .rows{display:flex;flex-direction:column;gap:10px}
+  .row{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:0 8px 0 16px;border-radius:16px;text-align:left;color:var(--ink);box-shadow:0 1px 0 rgba(0,0,0,.18)}
+  .row:active{transform:scale(.992)}
+  .row .rname{flex:1 1 auto;min-width:0;font-size:17px;font-weight:700;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+  .row .rright{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  .row .rtime{font-size:14.5px;font-weight:700;color:var(--ink);opacity:.92}
+  .row .rno{font-weight:600;opacity:.78}
+  .row .rdot{width:9px;height:9px;border-radius:50%;background:var(--ink);animation:tbblink 1.4s ease-in-out infinite}
+  .row .rmore{flex:0 0 auto;font-size:22px;line-height:1;color:var(--ink);opacity:.7;padding:10px 8px;border-radius:10px}
+  .row .rmore:active{opacity:1}
+  @keyframes tbblink{0%,100%{opacity:1}50%{opacity:.2}}
   .linkbtn{display:block;width:100%;text-align:center;background:none;border:none;color:var(--muted);font-size:12.5px;padding:10px 2px 2px;text-decoration:underline;text-underline-offset:2px}
   /* reports */
   .reprow{padding:12px 2px 10px;border-bottom:1px solid var(--line)}
@@ -601,14 +613,14 @@ function renderHome(){
     const acts=state.activities.filter(a=>a.groupId===g.id);
     h+='<div class="group"><div class="grouphead"><span class="gname">'+esc(g.name)+'</span>'+
        '<button class="gedit" data-act="edit-group" data-id="'+g.id+'">✎</button></div>';
-    h+= acts.length? '<div class="grid">'+acts.map(tileHTML).join("")+'</div>'
+    h+= acts.length? '<div class="rows">'+acts.map(tileHTML).join("")+'</div>'
        : '<div class="muted small" style="padding:0 4px 4px">'+t("group_empty")+'</div>';
     h+='</div>';
   }
   const ung=state.activities.filter(a=>!a.groupId || !state.groups.some(g=>g.id===a.groupId));
   if(ung.length){
-    if(state.groups.length) h+='<div class="group"><div class="grouphead"><span class="gname">'+t("ungrouped")+'</span></div><div class="grid">'+ung.map(tileHTML).join("")+'</div></div>';
-    else h+='<div class="group" style="margin-top:8px"><div class="grid">'+ung.map(tileHTML).join("")+'</div></div>';
+    if(state.groups.length) h+='<div class="group"><div class="grouphead"><span class="gname">'+t("ungrouped")+'</span></div><div class="rows">'+ung.map(tileHTML).join("")+'</div></div>';
+    else h+='<div class="group" style="margin-top:8px"><div class="rows">'+ung.map(tileHTML).join("")+'</div></div>';
   }
   h+='</div>';
   return h;
@@ -616,11 +628,13 @@ function renderHome(){
 function tileHTML(a){
   const running = state.active && state.active.activityId===a.id;
   const tm=activityToday(a.id);
-  return '<button class="tile'+(running?" running":"")+'" style="'+inkStyle(a.color)+'" data-act="open-activity" data-id="'+a.id+'">'+
-    '<button class="tcorner" data-act="edit-activity" data-id="'+a.id+'">⋯</button>'+
-    (running?'<span class="tdot"></span>':'<span></span>')+
-    '<div class="tname">'+esc(a.name)+'</div>'+
-    '<div class="ttime">'+(running?"● ":"")+(tm? '<span class="mono">'+fmtDuration(tm)+'</span> '+t("tile_today") : '<span style="opacity:.8">'+t("tile_notstarted")+'</span>')+'</div>'+
+  return '<button class="row'+(running?" running":"")+'" style="'+inkStyle(a.color)+'" data-act="open-activity" data-id="'+a.id+'">'+
+    '<span class="rname">'+esc(a.name)+'</span>'+
+    '<span class="rright">'+
+      (running?'<span class="rdot"></span>':'')+
+      (tm? '<span class="rtime mono">'+fmtDuration(tm)+'</span>' : '<span class="rtime rno">'+t("tile_notstarted")+'</span>')+
+    '</span>'+
+    '<span class="rmore" data-act="edit-activity" data-id="'+a.id+'">⋯</span>'+
     '</button>';
 }
 function renderActivity(id){
